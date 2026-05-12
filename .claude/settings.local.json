@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(git init *)",
+      "PowerShell(npm run *)",
+      "PowerShell(npm install *)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('version:', d.get\\('version'\\)\\); print\\('main:', d.get\\('main'\\)\\); print\\('exports keys:', list\\(d.get\\('exports', {}\\).keys\\(\\)\\)[:10]\\)\")",
+      "Bash(curl -s -X POST http://localhost:3000/api/chat -H \"Content-Type: application/json\" -d \"{\\\\\"messages\\\\\":[{\\\\\"role\\\\\":\\\\\"user\\\\\",\\\\\"content\\\\\":\\\\\"hello\\\\\"}]}\" --max-time 10)",
+      "Bash(curl -s -X POST http://localhost:3000/api/chat -H \"Content-Type: application/json\" -d \"{\\\\\"messages\\\\\":[{\\\\\"role\\\\\":\\\\\"user\\\\\",\\\\\"content\\\\\":\\\\\"hello\\\\\"}]}\" --max-time 15 -v)",
+      "PowerShell(Start-Sleep -Seconds 20; Get-Content \"C:\\\\Users\\\\nicka\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-nicka-Desktop-deadlineai\\\\98ebdde8-c0fe-4abd-99c4-97e69d66de65\\\\tasks\\\\bbs973iu4.output\"; Write-Host \"---\"; Invoke-WebRequest -Uri \"http://localhost:3000\" -Method GET -TimeoutSec 5 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty StatusCode)",
+      "Bash(curl *)",
+      "PowerShell($env:ANTHROPIC_API_KEY)",
+      "Bash(node -e ' *)",
+      "Bash(echo \"Exit: $?\")",
+      "PowerShell(Get-ChildItem *)",
+      "Bash(node *)",
+      "PowerShell($env:ANTHROPIC_API_KEY; [System.Environment]::GetEnvironmentVariable\\(\"ANTHROPIC_API_KEY\", \"User\"\\); [System.Environment]::GetEnvironmentVariable\\(\"ANTHROPIC_API_KEY\", \"Machine\"\\))",
+      "Bash(npm run *)"
+    ]
+  }
+}
