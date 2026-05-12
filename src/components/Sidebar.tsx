@@ -10,17 +10,20 @@ import {
   BarChart3,
   Zap,
 } from 'lucide-react';
-
-const navItems = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/schedule', label: 'Schedule', icon: CalendarDays },
-  { href: '/deadlines', label: 'Deadlines', icon: BellDot, badge: '4' },
-  { href: '/chat', label: 'AI Chat', icon: MessageSquare, dot: true },
-  { href: '/progress', label: 'Progress', icon: BarChart3 },
-];
+import { useUser } from '@/context/UserContext';
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { profile } = useUser();
+
+  const deadlineCount = profile?.deadlines?.length ?? 0;
+  const navItems = [
+    { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/schedule', label: 'Schedule', icon: CalendarDays },
+    { href: '/deadlines', label: 'Deadlines', icon: BellDot, badge: deadlineCount > 0 ? String(deadlineCount) : undefined },
+    { href: '/chat', label: 'AI Chat', icon: MessageSquare, dot: true },
+    { href: '/progress', label: 'Progress', icon: BarChart3 },
+  ];
 
   return (
     <aside className="w-60 h-screen bg-white border-r border-gray-100 flex flex-col shrink-0">
@@ -96,11 +99,11 @@ export default function Sidebar() {
             className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
             style={{ background: 'linear-gradient(135deg, #534AB7 0%, #6B62C8 100%)' }}
           >
-            A
+            {profile?.name ? profile.name[0].toUpperCase() : '?'}
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900 truncate">Alex Student</p>
-            <p className="text-xs text-gray-400 truncate">Year 2 · Computer Science</p>
+            <p className="text-sm font-semibold text-gray-900 truncate">{profile?.name ?? 'Student'}</p>
+            <p className="text-xs text-gray-400 truncate capitalize">{profile?.preferredTime ?? ''} learner</p>
           </div>
         </div>
       </div>

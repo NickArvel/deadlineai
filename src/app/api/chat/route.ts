@@ -7,40 +7,71 @@ const anthropic = new Anthropic({
 
 console.log('[chat route] ANTHROPIC_API_KEY present:', !!process.env.ANTHROPIC_API_KEY);
 
-const SYSTEM_PROMPT = `You are DeadlineAI, an expert anti-procrastination study assistant for university students. You are embedded in a study planner app.
+type Deadline = {
+  id: string;
+  subject: string;
+  task: string;
+  dueDate: string;
+};
+
+type UserProfile = {
+  name: string;
+  hoursPerDay: number;
+  preferredTime: 'morning' | 'afternoon' | 'evening';
+  unavailableDays: string[];
+  deadlines: Deadline[];
+};
+
+function buildSystemPrompt(profile: UserProfile | null): string {
+  if (!profile) {
+    return `You are DeadlineAI, an expert anti-procrastination study assistant for university students embedded in a study planner app.
+Your role: help students manage time, beat procrastination, and stay on track.
+Be concise, encouraging, and practical. Use **bold** for emphasis and bullet points for lists.`;
+  }
+
+  const today = new Date().toDateString();
+  const active = profile.deadlines
+    .filter((d) => new Date(d.dueDate) >= new Date(today))
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
+  const deadlineList = active
+    .map((d, i) => {
+      const days = Math.ceil((new Date(d.dueDate).getTime() - Date.now()) / 86400000);
+      const when = days === 0 ? 'Due TODAY' : days === 1 ? 'Due tomorrow' : `Due in ${days} days (${d.dueDate})`;
+      return `${i + 1}. ${d.task} (${d.subject}) — ${when}`;
+    })
+    .join('\n');
+
+  return `You are DeadlineAI, an expert anti-procrastination study assistant for university students. You are embedded in a study planner app.
 
 Student profile:
-- Name: Alex, Year 2 Computer Science student
-- Current study streak: 7 days
-- Focus score today: 87% (excellent)
+- Name: ${profile.name}
+- Daily study goal: ${profile.hoursPerDay} hours/day
+- Preferred study time: ${profile.preferredTime}
+- Unavailable days: ${profile.unavailableDays.length > 0 ? profile.unavailableDays.join(', ') : 'None'}
 
 Upcoming deadlines (most urgent first):
-1. Linear Algebra Problem Set 4 (Mathematics) — Due TODAY at 11:59 PM — 65% complete
-2. History Research Paper Draft — Due tomorrow (May 13) at 5:00 PM — 30% complete
-3. Chemistry Lab Report — Due May 14 — 10% complete
-4. JavaScript Final Project (Computer Science) — Due May 17 — 45% complete
-
-Today's study sessions:
-- 9:00–10:30 AM: Mathematics — Linear Algebra Review (completed ✓)
-- 1:00–3:00 PM: History — Research Paper Outline (currently active)
-- 4:00–5:30 PM: Chemistry — Lab Report Writing (upcoming)
+${deadlineList || 'No deadlines currently added.'}
 
 Your role:
-- Help Alex manage time, beat procrastination, and stay on track
+- Help ${profile.name} manage time, beat procrastination, and stay on track
 - Give specific, actionable advice referencing their actual deadlines and schedule
 - Be concise, encouraging, and practical — never preachy
 - Use **bold** for emphasis and bullet points for lists
 - Suggest study techniques (Pomodoro, spaced repetition, active recall) when relevant
-- If asked to create a plan or schedule, be specific with times and tasks`;
+- If asked to create a plan or schedule, be specific with times and tasks based on their ${profile.hoursPerDay}h/day goal and ${profile.preferredTime} preference`;
+}
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages } = await req.json();
+    const { messages, userProfile } = await req.json();
+
+    const systemPrompt = buildSystemPrompt(userProfile ?? null);
 
     const stream = anthropic.messages.stream({
       model: 'claude-sonnet-4-6',
       max_tokens: 1024,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       messages,
     });
 

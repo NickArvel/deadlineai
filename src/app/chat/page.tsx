@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { Zap, BookOpen, CalendarDays, Flame, ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react';
 import { useChat } from '@/context/ChatContext';
+import { useUser } from '@/context/UserContext';
 
 const suggestions = [
   { icon: <BookOpen size={14} />, text: 'What should I study right now?' },
@@ -31,6 +32,8 @@ function renderMarkdown(text: string) {
 
 export default function ChatPage() {
   const { messages, isLoading, sendMessage, pendingMessage, clearPending } = useChat();
+  const { profile } = useUser();
+  const userInitial = profile?.name ? profile.name[0].toUpperCase() : '?';
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when messages change
@@ -87,7 +90,7 @@ export default function ChatPage() {
                 className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-white text-sm font-bold"
                 style={{ background: 'linear-gradient(135deg, #534AB7, #7B73D1)' }}
               >
-                A
+                {userInitial}
               </div>
             )}
 

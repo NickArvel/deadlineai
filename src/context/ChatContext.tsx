@@ -4,10 +4,12 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useRef,
   useState,
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { UserProfile } from '@/context/UserContext';
 
 export type Message = {
   id: number;
@@ -33,30 +35,67 @@ function now() {
   });
 }
 
-const WELCOME: Message = {
-  id: 0,
-  role: 'assistant',
-  content:
-    "Hi Alex! 👋 I'm DeadlineAI, your personal study assistant. I've analysed your upcoming deadlines — you have **4 assignments due this week**, with your Linear Algebra problem set being the most urgent (due **tonight at 11:59 PM**). How can I help you today?",
-  timestamp: now(),
-};
+function buildWelcome(profile: UserProfile | null): Message {
+  if (!profile) {
+    return {
+      id: 0,
+      role: 'assistant',
+      content: "Hi! I'm DeadlineAI, your personal study assistant. How can I help you today?",
+      timestamp: now(),
+    };
+  }
+
+  const active = profile.deadlines
+    .filter((d) => new Date(d.dueDate) >= new Date(new Date().toDateString()))
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
+  const mostUrgent = active[0];
+  const urgentLine = mostUrgent
+    ? ` Your most urgent deadline is **${mostUrgent.task}** for ${mostUrgent.subject}.`
+    : '';
+
+  return {
+    id: 0,
+    role: 'assistant',
+    content: `Hi ${profile.name}! 👋 I'm DeadlineAI, your personal study assistant. I can see you have **${active.length} upcoming deadline${active.length !== 1 ? 's' : ''}**.${urgentLine} How can I help you today?`,
+    timestamp: now(),
+  };
+}
+
+function getProfileFromStorage(): UserProfile | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem('deadlineai_profile');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
-  const [messages, setMessages] = useState<Message[]>([WELCOME]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
-  const messagesRef = useRef<Message[]>([WELCOME]);
+  const messagesRef = useRef<Message[]>([]);
+  const welcomeIdRef = useRef<number>(0);
   const pathname = usePathname();
   const router = useRouter();
 
-  // Keep ref in sync so sendMessage always sees the latest messages
+  // Initialize welcome message once on mount (after localStorage is available)
+  useEffect(() => {
+    const profile = getProfileFromStorage();
+    const welcome = buildWelcome(profile);
+    welcomeIdRef.current = welcome.id;
+    setMessages([welcome]);
+    messagesRef.current = [welcome];
+  }, []);
+
   messagesRef.current = messages;
 
   const sendMessage = useCallback(
     async (content: string) => {
       if (!content.trim() || isLoading) return;
 
-      // If not on chat page, navigate there first — the page will pick up pendingMessage
       if (pathname !== '/chat') {
         setPendingMessage(content);
         router.push('/chat');
@@ -72,14 +111,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
 
       try {
+        const welcomeId = welcomeIdRef.current;
         const apiMessages = [...messagesRef.current, userMsg]
-          .filter((m) => m.id !== WELCOME.id && m.content !== '')
+          .filter((m) => m.id !== welcomeId && m.content !== '')
           .map((m) => ({ role: m.role, content: m.content }));
+
+        const profile = getProfileFromStorage();
 
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: apiMessages }),
+          body: JSON.stringify({ messages: apiMessages, userProfile: profile }),
         });
 
         if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);

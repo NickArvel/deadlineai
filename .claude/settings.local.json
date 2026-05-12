@@ -15,7 +15,9 @@
       "PowerShell(Get-ChildItem *)",
       "Bash(node *)",
       "PowerShell($env:ANTHROPIC_API_KEY; [System.Environment]::GetEnvironmentVariable\\(\"ANTHROPIC_API_KEY\", \"User\"\\); [System.Environment]::GetEnvironmentVariable\\(\"ANTHROPIC_API_KEY\", \"Machine\"\\))",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(npx tsc *)",
+      "Bash(npx next *)"
     ]
   }
 }
