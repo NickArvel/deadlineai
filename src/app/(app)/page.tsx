@@ -1,7 +1,9 @@
 'use client';
 
-import { Clock, CheckSquare, Target, Flame, BellDot, CalendarDays, Plus, Zap } from 'lucide-react';
+import { useState } from 'react';
+import { Clock, CheckSquare, Target, Flame, BellDot, CalendarDays, Plus, Zap, Upload } from 'lucide-react';
 import { useUser, Deadline } from '@/context/UserContext';
+import UploadModal from '@/components/UploadModal';
 
 const COLORS = ['#8B5CF6', '#F59E0B', '#10B981', '#3B82F6', '#EF4444', '#EC4899', '#14B8A6', '#F97316'];
 
@@ -43,6 +45,7 @@ function greeting() {
 
 export default function DashboardPage() {
   const { profile } = useUser();
+  const [showUpload, setShowUpload] = useState(false);
 
   const deadlines = profile?.deadlines ?? [];
   const allSubjects = [...new Set(deadlines.map((d) => d.subject))];
@@ -77,14 +80,26 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6 space-y-6 pb-4">
+      {showUpload && <UploadModal onClose={() => setShowUpload(false)} />}
+
       {/* Greeting */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">{greeting()}, {userName}! 👋</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          You have{' '}
-          <span className="font-semibold text-gray-700">{active.length} deadline{active.length !== 1 ? 's' : ''}</span>{' '}
-          coming up. Stay on track — you&apos;ve got this!
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{greeting()}, {userName}! 👋</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            You have{' '}
+            <span className="font-semibold text-gray-700">{active.length} deadline{active.length !== 1 ? 's' : ''}</span>{' '}
+            coming up. Stay on track — you&apos;ve got this!
+          </p>
+        </div>
+        <button
+          onClick={() => setShowUpload(true)}
+          className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-lg hover:opacity-90 transition-all shrink-0"
+          style={{ background: '#534AB7' }}
+        >
+          <Upload size={15} />
+          Upload Schedule
+        </button>
       </div>
 
       {/* Stats Row */}

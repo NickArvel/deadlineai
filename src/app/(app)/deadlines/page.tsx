@@ -1,7 +1,9 @@
 'use client';
 
-import { Plus, Filter, MoreHorizontal, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Filter, MoreHorizontal, CheckCircle2, Clock, AlertCircle, Upload } from 'lucide-react';
 import { useUser } from '@/context/UserContext';
+import UploadModal from '@/components/UploadModal';
 
 const COLORS = ['#8B5CF6', '#F59E0B', '#10B981', '#3B82F6', '#EF4444', '#EC4899', '#14B8A6', '#F97316'];
 
@@ -37,6 +39,7 @@ function colorFor(subject: string, allSubjects: string[]): string {
 
 export default function DeadlinesPage() {
   const { profile } = useUser();
+  const [showUpload, setShowUpload] = useState(false);
   const deadlines = profile?.deadlines ?? [];
   const allSubjects = [...new Set(deadlines.map((d) => d.subject))];
 
@@ -56,6 +59,8 @@ export default function DeadlinesPage() {
 
   return (
     <div className="p-6 space-y-5">
+      {showUpload && <UploadModal onClose={() => setShowUpload(false)} />}
+
       {/* Tabs + Actions */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1 bg-white border border-gray-100 rounded-lg p-1">
@@ -83,6 +88,13 @@ export default function DeadlinesPage() {
           <button className="flex items-center gap-2 text-sm font-medium text-gray-600 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
             <Filter size={14} />
             Filter
+          </button>
+          <button
+            onClick={() => setShowUpload(true)}
+            className="flex items-center gap-2 text-sm font-medium text-gray-600 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+          >
+            <Upload size={14} />
+            Upload
           </button>
           <button
             className="flex items-center gap-2 text-sm font-semibold text-white px-4 py-2 rounded-lg hover:opacity-90 transition-all"

@@ -22,7 +22,8 @@
       "PowerShell(Start-Sleep -Seconds 5; try { Invoke-WebRequest -Uri \"http://localhost:3000\" -UseBasicParsing -TimeoutSec 10 | Select-Object -ExpandProperty StatusCode } catch { $_.Exception.Message })",
       "PowerShell(try { Invoke-WebRequest -Uri \"http://localhost:3000/sign-in\" -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 5 } catch { \"Status: $\\($_.Exception.Response.StatusCode.value__\\) $\\($_.Exception.Response.StatusDescription\\)\" })",
       "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:3000/\" -UseBasicParsing -MaximumRedirection 5 -TimeoutSec 10; \"Status: $\\($r.StatusCode\\)\" } catch { \"Error: $\\($_.Exception.Message\\)\" })",
-      "PowerShell($r = Invoke-WebRequest -Uri \"http://localhost:3000/\" -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 10; \"Status: $\\($r.StatusCode\\)\"; $r.Headers | Format-List)"
+      "PowerShell($r = Invoke-WebRequest -Uri \"http://localhost:3000/\" -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 10; \"Status: $\\($r.StatusCode\\)\"; $r.Headers | Format-List)",
+      "Skill(claude-api)"
     ]
   }
 }
