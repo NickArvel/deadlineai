@@ -1,7 +1,11 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { Zap, BookOpen, CalendarDays, Flame, ThumbsUp, ThumbsDown, Loader2, Paperclip } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Zap, BookOpen, CalendarDays, Flame,
+  ThumbsUp, ThumbsDown, Loader2,
+  Upload, FileText, FileImage, X,
+} from 'lucide-react';
 import { useChat } from '@/context/ChatContext';
 import { useUser } from '@/context/UserContext';
 
@@ -31,17 +35,18 @@ function renderMarkdown(text: string) {
 }
 
 export default function ChatPage() {
-  const { messages, isLoading, sendMessage, pendingMessage, clearPending } = useChat();
+  const { messages, isLoading, sendMessage, pendingMessage, clearPending, attachedFile, attachFile, clearAttachment } = useChat();
   const { profile } = useUser();
   const userInitial = profile?.name ? profile.name[0].toUpperCase() : '?';
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const dragCounter = useRef(0);
 
-  // Auto-scroll to bottom when messages change
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
-  // Fire any message that was typed on another page
   useEffect(() => {
     if (pendingMessage) {
       clearPending();
@@ -49,9 +54,41 @@ export default function ChatPage() {
     }
   }, [pendingMessage, clearPending, sendMessage]);
 
+  function handleDragEnter(e: React.DragEvent) {
+    e.preventDefault();
+    dragCounter.current++;
+    setDragActive(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    dragCounter.current--;
+    if (dragCounter.current === 0) setDragActive(false);
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+  }
+
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    dragCounter.current = 0;
+    setDragActive(false);
+    const file = e.dataTransfer.files[0];
+    if (file) await handleFile(file);
+  }
+
+  async function handleFile(file: File) {
+    const allowed = ['image/jpeg', 'image/png', 'application/pdf'];
+    if (!allowed.includes(file.type)) return;
+    await attachFile(file);
+  }
+
+  const isImageFile = attachedFile?.mimeType.startsWith('image/');
+
   return (
     <div className="flex flex-col h-full">
-      {/* Messages */}
+      {/* ── Messages ── */}
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
         {/* Header banner */}
         <div className="rounded-xl p-4 flex items-center gap-4" style={{ background: '#EEEDFE' }}>
@@ -66,7 +103,7 @@ export default function ChatPage() {
               AI Chat — Powered by DeadlineAI
             </p>
             <p className="text-xs text-gray-500 mt-0.5">
-              Ask me anything about your schedule, deadlines, study strategies, or how to beat procrastination.
+              Ask me anything about your schedule, deadlines, or study strategies. Drop a file below to analyse it.
             </p>
           </div>
         </div>
@@ -77,7 +114,6 @@ export default function ChatPage() {
             key={message.id}
             className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}
           >
-            {/* Avatar */}
             {message.role === 'assistant' ? (
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5"
@@ -94,7 +130,6 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* Bubble */}
             <div
               className={`max-w-2xl flex flex-col gap-1 ${
                 message.role === 'user' ? 'items-end' : 'items-start'
@@ -102,11 +137,15 @@ export default function ChatPage() {
             >
               {message.attachedFileName && (
                 <div
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border mb-0.5"
-                  style={{ background: 'rgba(83,74,183,0.15)', color: '#fff', borderColor: 'rgba(255,255,255,0.25)' }}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl mb-0.5"
+                  style={{ background: 'rgba(83,74,183,0.25)', color: '#fff' }}
                 >
-                  <Paperclip size={10} />
-                  <span className="max-w-[200px] truncate">{message.attachedFileName}</span>
+                  {message.attachedFileName.match(/\.(jpg|jpeg|png)$/i) ? (
+                    <FileImage size={11} />
+                  ) : (
+                    <FileText size={11} />
+                  )}
+                  <span className="max-w-[200px] truncate font-medium">{message.attachedFileName}</span>
                 </div>
               )}
               <div
@@ -120,7 +159,6 @@ export default function ChatPage() {
                 {message.content ? (
                   renderMarkdown(message.content)
                 ) : (
-                  /* Streaming cursor while content is empty */
                   <span className="inline-block w-2 h-4 rounded-sm animate-pulse" style={{ background: '#534AB7' }} />
                 )}
               </div>
@@ -146,7 +184,6 @@ export default function ChatPage() {
           </div>
         ))}
 
-        {/* Typing indicator — shown while waiting for first token */}
         {isLoading && messages[messages.length - 1]?.content === '' && (
           <div className="flex gap-3">
             <div
@@ -165,8 +202,8 @@ export default function ChatPage() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Suggestion chips */}
-      <div className="px-6 pb-3 flex items-center gap-2 flex-wrap">
+      {/* ── Suggestion chips ── */}
+      <div className="px-6 pt-2 pb-3 flex items-center gap-2 flex-wrap border-t border-gray-50">
         <span className="text-xs text-gray-400">Try asking:</span>
         {suggestions.map((s) => (
           <button
@@ -179,6 +216,92 @@ export default function ChatPage() {
             {s.text}
           </button>
         ))}
+      </div>
+
+      {/* ── File upload area ── */}
+      <div className="px-6 pb-3">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.jpg,.jpeg,.png"
+          className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) { handleFile(f); e.target.value = ''; } }}
+        />
+
+        {attachedFile ? (
+          /* Preview card */
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-xl border transition-all"
+            style={{
+              background: '#EEEDFE',
+              borderColor: 'rgba(83,74,183,0.3)',
+            }}
+          >
+            <div
+              className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+              style={{ background: '#534AB7' }}
+            >
+              {isImageFile ? (
+                <FileImage size={16} stroke="white" />
+              ) : (
+                <FileText size={16} stroke="white" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold truncate" style={{ color: '#534AB7' }}>
+                {attachedFile.name}
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: 'rgba(83,74,183,0.6)' }}>
+                Attached · will be sent with your next message
+              </p>
+            </div>
+            <button
+              onClick={clearAttachment}
+              className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors shrink-0 hover:bg-[#534AB7]/10"
+              style={{ color: '#534AB7' }}
+              title="Remove attachment"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        ) : (
+          /* Drop zone */
+          <div
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-dashed cursor-pointer select-none transition-all"
+            style={{
+              borderColor: dragActive ? '#534AB7' : 'rgba(83,74,183,0.28)',
+              background: dragActive
+                ? '#EEEDFE'
+                : 'rgba(83,74,183,0.035)',
+              transform: dragActive ? 'scale(1.005)' : 'scale(1)',
+            }}
+          >
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all"
+              style={{
+                background: dragActive ? '#534AB7' : 'rgba(83,74,183,0.12)',
+              }}
+            >
+              <Upload
+                size={18}
+                style={{ color: dragActive ? '#fff' : '#534AB7' }}
+              />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-700 leading-snug">
+                Drop your timetable, syllabus or homework here
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                PDF, JPG, PNG supported · or click to browse
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
