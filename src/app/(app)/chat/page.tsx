@@ -5,9 +5,11 @@ import {
   Zap, BookOpen, CalendarDays, Flame,
   ThumbsUp, ThumbsDown, Loader2,
   Upload, FileText, FileImage, X,
+  PlusCircle, ExternalLink, PlayCircle,
 } from 'lucide-react';
-import { useChat } from '@/context/ChatContext';
+import { useChat, SearchResult } from '@/context/ChatContext';
 import { useUser } from '@/context/UserContext';
+import { generateScheduleTasks, Deadline } from '@/context/UserContext';
 
 const suggestions = [
   { icon: <BookOpen size={14} />, text: 'What should I study right now?' },
@@ -34,14 +36,59 @@ function renderMarkdown(text: string) {
   });
 }
 
+function SearchCards({ results }: { results: SearchResult[] }) {
+  if (results.length === 0) return null;
+  return (
+    <div className="mt-3 space-y-2">
+      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
+        Web Results
+      </p>
+      {results.map((r, i) => (
+        <a
+          key={i}
+          href={r.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-start gap-3 p-3 bg-white border border-gray-100 rounded-xl hover:border-[#534AB7]/40 hover:shadow-sm transition-all group"
+        >
+          {r.source.includes('youtube') ? (
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-red-50">
+              <PlayCircle size={16} className="text-red-500" />
+            </div>
+          ) : (
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: '#EEEDFE' }}>
+              <ExternalLink size={14} style={{ color: '#534AB7' }} />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-gray-800 group-hover:text-[#534AB7] transition-colors leading-snug line-clamp-2">
+              {r.title}
+            </p>
+            {r.description && (
+              <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-2 leading-relaxed">
+                {r.description}
+              </p>
+            )}
+            <p className="text-[10px] text-gray-300 mt-1">{r.source}</p>
+          </div>
+        </a>
+      ))}
+    </div>
+  );
+}
+
 export default function ChatPage() {
-  const { messages, isLoading, sendMessage, pendingMessage, clearPending, attachedFile, attachFile, clearAttachment } = useChat();
-  const { profile } = useUser();
+  const {
+    messages, isLoading, sendMessage, pendingMessage, clearPending,
+    attachedFile, attachFile, clearAttachment, markActionSaved,
+  } = useChat();
+  const { profile, saveProfile, addScheduleTasks, addResource } = useUser();
   const userInitial = profile?.name ? profile.name[0].toUpperCase() : '?';
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
   const dragCounter = useRef(0);
+  const [savingAction, setSavingAction] = useState<number | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -84,11 +131,88 @@ export default function ChatPage() {
     await attachFile(file);
   }
 
+  async function handleSaveDeadline(messageId: number) {
+    const msg = messages.find((m) => m.id === messageId);
+    if (!msg?.action || !profile) return;
+
+    setSavingAction(messageId);
+    try {
+      const { action } = msg;
+      const newDeadline: Deadline = {
+        id: Date.now().toString(),
+        subject: action.subject,
+        task: action.task,
+        dueDate: action.dueDate,
+        type: action.type ?? 'assignment',
+        studyPlan: msg.content,
+      };
+
+      saveProfile({ ...profile, deadlines: [...profile.deadlines, newDeadline] });
+      addScheduleTasks(generateScheduleTasks(newDeadline, profile));
+      markActionSaved(messageId);
+
+      // Generate resources in background — addResource uses profileRef internally so the closure is safe
+      fetch('/api/generate-resources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: action.subject,
+          task: action.task,
+          dueDate: action.dueDate,
+          studyPlan: msg.content,
+        }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.flashcards?.length || data.mockQuestions?.length || data.youtubeLinks?.length) {
+            addResource({
+              id: Date.now().toString(),
+              deadlineId: newDeadline.id,
+              subject: action.subject,
+              task: action.task,
+              flashcards: data.flashcards ?? [],
+              mockQuestions: data.mockQuestions ?? [],
+              youtubeLinks: data.youtubeLinks ?? [],
+              createdAt: new Date().toISOString(),
+            });
+          }
+        })
+        .catch(() => { /* ignore */ });
+    } finally {
+      setSavingAction(null);
+    }
+  }
+
   const isImageFile = attachedFile?.mimeType.startsWith('image/');
+
+  // Build date dividers
+  const msgsWithDividers: Array<{ type: 'msg'; msg: typeof messages[0] } | { type: 'divider'; date: string }> = [];
+  let lastDate = '';
+  for (const msg of messages) {
+    if (msg.id === -1) {
+      msgsWithDividers.push({ type: 'msg', msg });
+      continue;
+    }
+    if (msg.date !== lastDate) {
+      lastDate = msg.date;
+      msgsWithDividers.push({ type: 'divider', date: msg.date });
+    }
+    msgsWithDividers.push({ type: 'msg', msg });
+  }
+
+  function formatDividerDate(dateStr: string) {
+    const d = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    if (d.toDateString() === today.toDateString()) return 'Today';
+    if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  }
 
   return (
     <div className="flex flex-col h-full">
-      {/* ── Messages ── */}
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
         {/* Header banner */}
         <div className="rounded-xl p-4 flex items-center gap-4" style={{ background: '#EEEDFE' }}>
@@ -108,81 +232,133 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Conversation */}
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}
-          >
-            {message.role === 'assistant' ? (
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-                style={{ background: '#534AB7' }}
-              >
-                <Zap size={14} stroke="white" fill="white" />
+        {/* Conversation with date dividers */}
+        {msgsWithDividers.map((item, idx) => {
+          if (item.type === 'divider') {
+            return (
+              <div key={`divider-${item.date}-${idx}`} className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-gray-100" />
+                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                  {formatDividerDate(item.date)}
+                </span>
+                <div className="flex-1 h-px bg-gray-100" />
               </div>
-            ) : (
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-white text-sm font-bold"
-                style={{ background: 'linear-gradient(135deg, #534AB7, #7B73D1)' }}
-              >
-                {userInitial}
-              </div>
-            )}
+            );
+          }
 
+          const message = item.msg;
+          return (
             <div
-              className={`max-w-2xl flex flex-col gap-1 ${
-                message.role === 'user' ? 'items-end' : 'items-start'
-              }`}
+              key={message.id}
+              className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}
             >
-              {message.attachedFileName && (
+              {message.role === 'assistant' ? (
                 <div
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl mb-0.5"
-                  style={{ background: 'rgba(83,74,183,0.25)', color: '#fff' }}
+                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                  style={{ background: '#534AB7' }}
                 >
-                  {message.attachedFileName.match(/\.(jpg|jpeg|png)$/i) ? (
-                    <FileImage size={11} />
-                  ) : (
-                    <FileText size={11} />
-                  )}
-                  <span className="max-w-[200px] truncate font-medium">{message.attachedFileName}</span>
+                  <Zap size={14} stroke="white" fill="white" />
+                </div>
+              ) : (
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-white text-sm font-bold"
+                  style={{ background: 'linear-gradient(135deg, #534AB7, #7B73D1)' }}
+                >
+                  {userInitial}
                 </div>
               )}
-              <div
-                className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                  message.role === 'user'
-                    ? 'rounded-tr-sm text-white'
-                    : 'rounded-tl-sm bg-white border border-gray-100 text-gray-800 shadow-sm'
-                }`}
-                style={message.role === 'user' ? { background: '#534AB7' } : {}}
-              >
-                {message.content ? (
-                  renderMarkdown(message.content)
-                ) : (
-                  <span className="inline-block w-2 h-4 rounded-sm animate-pulse" style={{ background: '#534AB7' }} />
-                )}
-              </div>
 
               <div
-                className={`flex items-center gap-2 ${
-                  message.role === 'user' ? 'flex-row-reverse' : ''
+                className={`max-w-2xl flex flex-col gap-1 ${
+                  message.role === 'user' ? 'items-end' : 'items-start'
                 }`}
               >
-                <span className="text-[10px] text-gray-400">{message.timestamp}</span>
-                {message.role === 'assistant' && message.content && (
-                  <div className="flex items-center gap-1">
-                    <button className="p-1 rounded text-gray-300 hover:text-emerald-500 transition-colors">
-                      <ThumbsUp size={11} />
-                    </button>
-                    <button className="p-1 rounded text-gray-300 hover:text-red-400 transition-colors">
-                      <ThumbsDown size={11} />
-                    </button>
+                {message.attachedFileName && (
+                  <div
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl mb-0.5"
+                    style={{ background: 'rgba(83,74,183,0.25)', color: '#fff' }}
+                  >
+                    {message.attachedFileName.match(/\.(jpg|jpeg|png)$/i) ? (
+                      <FileImage size={11} />
+                    ) : (
+                      <FileText size={11} />
+                    )}
+                    <span className="max-w-[200px] truncate font-medium">{message.attachedFileName}</span>
                   </div>
                 )}
+
+                <div
+                  className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+                    message.role === 'user'
+                      ? 'rounded-tr-sm text-white'
+                      : 'rounded-tl-sm bg-white border border-gray-100 text-gray-800 shadow-sm'
+                  }`}
+                  style={message.role === 'user' ? { background: '#534AB7' } : {}}
+                >
+                  {message.content ? (
+                    renderMarkdown(message.content)
+                  ) : (
+                    <span
+                      className="inline-block w-2 h-4 rounded-sm animate-pulse"
+                      style={{ background: '#534AB7' }}
+                    />
+                  )}
+                </div>
+
+                {/* Search results */}
+                {message.searchResults && message.searchResults.length > 0 && (
+                  <div className="w-full max-w-2xl">
+                    <SearchCards results={message.searchResults} />
+                  </div>
+                )}
+
+                {/* Add to Deadlines action */}
+                {message.role === 'assistant' && message.action && message.content && (
+                  <div className="mt-1">
+                    {message.actionSaved ? (
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 px-3 py-1.5 rounded-lg bg-emerald-50">
+                        <span className="w-4 h-4 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 text-[10px]">✓</span>
+                        Added to Deadlines
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleSaveDeadline(message.id)}
+                        disabled={savingAction === message.id}
+                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
+                        style={{ background: '#534AB7', color: '#fff' }}
+                      >
+                        {savingAction === message.id ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <PlusCircle size={12} />
+                        )}
+                        Add &ldquo;{message.action.task}&rdquo; to Deadlines
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <div
+                  className={`flex items-center gap-2 ${
+                    message.role === 'user' ? 'flex-row-reverse' : ''
+                  }`}
+                >
+                  <span className="text-[10px] text-gray-400">{message.timestamp}</span>
+                  {message.role === 'assistant' && message.content && (
+                    <div className="flex items-center gap-1">
+                      <button className="p-1 rounded text-gray-300 hover:text-emerald-500 transition-colors">
+                        <ThumbsUp size={11} />
+                      </button>
+                      <button className="p-1 rounded text-gray-300 hover:text-red-400 transition-colors">
+                        <ThumbsDown size={11} />
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {isLoading && messages[messages.length - 1]?.content === '' && (
           <div className="flex gap-3">
@@ -202,7 +378,7 @@ export default function ChatPage() {
         <div ref={bottomRef} />
       </div>
 
-      {/* ── Suggestion chips ── */}
+      {/* Suggestion chips */}
       <div className="px-6 pt-2 pb-3 flex items-center gap-2 flex-wrap border-t border-gray-50">
         <span className="text-xs text-gray-400">Try asking:</span>
         {suggestions.map((s) => (
@@ -218,24 +394,23 @@ export default function ChatPage() {
         ))}
       </div>
 
-      {/* ── File upload area ── */}
+      {/* File upload area */}
       <div className="px-6 pb-3">
         <input
           ref={fileInputRef}
           type="file"
           accept=".pdf,.jpg,.jpeg,.png"
           className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) { handleFile(f); e.target.value = ''; } }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) { handleFile(f); e.target.value = ''; }
+          }}
         />
 
         {attachedFile ? (
-          /* Preview card */
           <div
             className="flex items-center gap-3 px-4 py-3 rounded-xl border transition-all"
-            style={{
-              background: '#EEEDFE',
-              borderColor: 'rgba(83,74,183,0.3)',
-            }}
+            style={{ background: '#EEEDFE', borderColor: 'rgba(83,74,183,0.3)' }}
           >
             <div
               className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
@@ -265,7 +440,6 @@ export default function ChatPage() {
             </button>
           </div>
         ) : (
-          /* Drop zone */
           <div
             onDragEnter={handleDragEnter}
             onDragLeave={handleDragLeave}
@@ -275,22 +449,15 @@ export default function ChatPage() {
             className="flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-dashed cursor-pointer select-none transition-all"
             style={{
               borderColor: dragActive ? '#534AB7' : 'rgba(83,74,183,0.28)',
-              background: dragActive
-                ? '#EEEDFE'
-                : 'rgba(83,74,183,0.035)',
+              background: dragActive ? '#EEEDFE' : 'rgba(83,74,183,0.035)',
               transform: dragActive ? 'scale(1.005)' : 'scale(1)',
             }}
           >
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all"
-              style={{
-                background: dragActive ? '#534AB7' : 'rgba(83,74,183,0.12)',
-              }}
+              style={{ background: dragActive ? '#534AB7' : 'rgba(83,74,183,0.12)' }}
             >
-              <Upload
-                size={18}
-                style={{ color: dragActive ? '#fff' : '#534AB7' }}
-              />
+              <Upload size={18} style={{ color: dragActive ? '#fff' : '#534AB7' }} />
             </div>
             <div>
               <p className="text-sm font-semibold text-gray-700 leading-snug">

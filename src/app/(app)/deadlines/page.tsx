@@ -61,6 +61,7 @@ export default function DeadlinesPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [showAddDeadline, setShowAddDeadline] = useState(false);
   const [planModal, setPlanModal] = useState<{ task: string; plan: string } | null>(null);
+  const [activeTab, setActiveTab] = useState(0);
 
   const deadlines = profile?.deadlines ?? [];
   const allSubjects = [...new Set(deadlines.map((d) => d.subject))];
@@ -73,11 +74,22 @@ export default function DeadlinesPage() {
   const dueToday = sorted.filter((d) => daysLeft(d.dueDate) === 0);
   const thisWeek = sorted.filter((d) => { const dl = daysLeft(d.dueDate); return dl > 0 && dl <= 7; });
 
+  const tabLists = [sorted, dueToday, thisWeek];
+  const displayList = tabLists[activeTab] ?? sorted;
+
   const tabs = [
     { label: 'All', count: deadlines.length },
     { label: 'Urgent', count: dueToday.length },
     { label: 'This Week', count: thisWeek.length },
   ];
+
+  // Progress per deadline from stored schedule tasks
+  const progressByDeadline: Record<string, { total: number; completed: number }> = {};
+  for (const task of profile?.scheduleTasks ?? []) {
+    if (!progressByDeadline[task.deadlineId]) progressByDeadline[task.deadlineId] = { total: 0, completed: 0 };
+    progressByDeadline[task.deadlineId].total++;
+    if (task.completed) progressByDeadline[task.deadlineId].completed++;
+  }
 
   function removeDeadline(id: string) {
     if (!profile) return;
@@ -118,15 +130,16 @@ export default function DeadlinesPage() {
           {tabs.map((tab, i) => (
             <button
               key={tab.label}
+              onClick={() => setActiveTab(i)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                i === 0 ? 'text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
+                i === activeTab ? 'text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
               }`}
-              style={i === 0 ? { background: '#534AB7' } : {}}
+              style={i === activeTab ? { background: '#534AB7' } : {}}
             >
               {tab.label}
               <span
                 className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                  i === 0 ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-500'
+                  i === activeTab ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-500'
                 }`}
               >
                 {tab.count}
@@ -193,15 +206,19 @@ export default function DeadlinesPage() {
         </div>
 
         <div className="divide-y divide-gray-50">
-          {sorted.length === 0 ? (
-            <p className="px-5 py-10 text-sm text-gray-400 text-center">No deadlines yet. Add one above!</p>
+          {displayList.length === 0 ? (
+            <p className="px-5 py-10 text-sm text-gray-400 text-center">
+              {activeTab === 0 ? 'No deadlines yet. Add one above!' : 'No deadlines in this category.'}
+            </p>
           ) : (
-            sorted.map((deadline) => {
+            displayList.map((deadline) => {
               const priority = getPriority(deadline.dueDate);
               const p = priorityConfig[priority];
               const dl = daysLeft(deadline.dueDate);
               const color = colorFor(deadline.subject, allSubjects);
               const hasPlan = !!deadline.studyPlan;
+
+              const progress = progressByDeadline[deadline.id];
 
               return (
                 <div key={deadline.id}>
@@ -233,6 +250,22 @@ export default function DeadlinesPage() {
                             </button>
                           )}
                         </div>
+                        {progress && progress.total > 0 && (
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden" style={{ maxWidth: 80 }}>
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{
+                                  width: `${Math.round((progress.completed / progress.total) * 100)}%`,
+                                  background: color,
+                                }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-gray-400 font-medium">
+                              {progress.completed}/{progress.total} sessions
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
 

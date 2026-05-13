@@ -10,8 +10,12 @@ import {
   BarChart3,
   Zap,
   LogOut,
+  BookMarked,
+  Plus,
+  MessageCircle,
 } from 'lucide-react';
 import { useUser } from '@/context/UserContext';
+import { useChat } from '@/context/ChatContext';
 import { useUser as useClerkUser, useClerk } from '@clerk/nextjs';
 
 export default function Sidebar() {
@@ -19,18 +23,38 @@ export default function Sidebar() {
   const { profile } = useUser();
   const { user: clerkUser } = useClerkUser();
   const { signOut } = useClerk();
+  const { sessions, currentSessionId, startNewChat, loadSession } = useChat();
 
   const deadlineCount = profile?.deadlines?.length ?? 0;
   const navItems = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/schedule', label: 'Schedule', icon: CalendarDays },
-    { href: '/deadlines', label: 'Deadlines', icon: BellDot, badge: deadlineCount > 0 ? String(deadlineCount) : undefined },
+    {
+      href: '/deadlines',
+      label: 'Deadlines',
+      icon: BellDot,
+      badge: deadlineCount > 0 ? String(deadlineCount) : undefined,
+    },
     { href: '/chat', label: 'AI Chat', icon: MessageSquare, dot: true },
+    { href: '/resources', label: 'Resources', icon: BookMarked },
     { href: '/progress', label: 'Progress', icon: BarChart3 },
   ];
 
   const displayName = clerkUser?.fullName || clerkUser?.firstName || profile?.name || 'Student';
   const avatarUrl = clerkUser?.imageUrl;
+
+  const recentSessions = sessions.slice(0, 5);
+
+  function formatSessionDate(iso: string) {
+    const d = new Date(iso);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+
+    if (d.toDateString() === today.toDateString()) return 'Today';
+    if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
 
   return (
     <aside className="w-60 h-screen bg-white border-r border-gray-100 flex flex-col shrink-0">
@@ -50,7 +74,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4">
+      <nav className="flex-1 px-3 py-4 overflow-y-auto">
         <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest px-3 mb-2">
           Main Menu
         </p>
@@ -71,7 +95,7 @@ export default function Sidebar() {
               >
                 <Icon
                   size={17}
-                  className={isActive ? 'text-[#534AB7]' : 'text-gray-400'}
+                  className={isActive ? '' : 'text-gray-400'}
                   style={isActive ? { color: '#534AB7' } : {}}
                 />
                 <span className="flex-1">{item.label}</span>
@@ -91,11 +115,52 @@ export default function Sidebar() {
           })}
         </div>
 
-        <div className="mt-6 mx-3 p-3 rounded-xl border border-dashed border-gray-200 bg-gray-50">
-          <p className="text-xs font-semibold text-gray-700">Pro Tip</p>
-          <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
-            Study in 90-min blocks with 15-min breaks for peak focus.
-          </p>
+        {/* Chat History */}
+        <div className="mt-5">
+          <div className="flex items-center justify-between px-3 mb-2">
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
+              Recent Chats
+            </p>
+            <button
+              onClick={startNewChat}
+              className="w-5 h-5 flex items-center justify-center rounded text-gray-400 hover:text-[#534AB7] hover:bg-[#EEEDFE] transition-colors"
+              title="New chat"
+            >
+              <Plus size={13} />
+            </button>
+          </div>
+
+          {recentSessions.length === 0 ? (
+            <p className="px-3 text-[11px] text-gray-400">No chats yet</p>
+          ) : (
+            <div className="space-y-0.5">
+              {recentSessions.map((session) => {
+                const isActive = session.id === currentSessionId && pathname === '/chat';
+                return (
+                  <button
+                    key={session.id}
+                    onClick={() => loadSession(session.id)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all ${
+                      isActive
+                        ? 'text-[#534AB7]'
+                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                    }`}
+                    style={isActive ? { backgroundColor: '#EEEDFE' } : {}}
+                  >
+                    <MessageCircle
+                      size={13}
+                      className="shrink-0"
+                      style={isActive ? { color: '#534AB7' } : { color: '#9CA3AF' }}
+                    />
+                    <span className="flex-1 text-xs truncate">{session.title}</span>
+                    <span className="text-[10px] text-gray-400 shrink-0">
+                      {formatSessionDate(session.updatedAt)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </nav>
 
@@ -120,7 +185,9 @@ export default function Sidebar() {
           )}
           <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
-            <p className="text-xs text-gray-400 truncate capitalize">{profile?.preferredTime ?? ''} learner</p>
+            <p className="text-xs text-gray-400 truncate capitalize">
+              {profile?.preferredTime ?? ''} learner
+            </p>
           </div>
         </div>
         <button
