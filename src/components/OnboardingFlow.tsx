@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Zap, Send } from 'lucide-react';
 import { useUser, UserProfile, Deadline } from '@/context/UserContext';
+import { useUser as useClerkUser } from '@clerk/nextjs';
 
 type Step =
-  | 'name'
   | 'hours'
   | 'time'
   | 'days'
@@ -18,7 +18,6 @@ type Step =
 type ChatMsg = { role: 'assistant' | 'user'; text: string };
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const COLORS = ['#8B5CF6', '#F59E0B', '#10B981', '#3B82F6', '#EF4444', '#EC4899', '#14B8A6', '#F97316'];
 
 function botMsg(text: string): ChatMsg {
   return { role: 'assistant', text };
@@ -26,15 +25,24 @@ function botMsg(text: string): ChatMsg {
 
 export default function OnboardingFlow() {
   const { saveProfile } = useUser();
+  const { user: clerkUser, isLoaded: clerkLoaded } = useClerkUser();
 
-  const [messages, setMessages] = useState<ChatMsg[]>([
-    botMsg("Hi! I'm DeadlineAI. I'll set up your personalised study planner in just a minute. What's your name?"),
-  ]);
-  const [step, setStep] = useState<Step>('name');
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [step, setStep] = useState<Step>('hours');
   const [input, setInput] = useState('');
+  const initializedRef = useRef(false);
+
+  // Set the greeting once Clerk has loaded the user
+  useEffect(() => {
+    if (!clerkLoaded || initializedRef.current) return;
+    const firstName = clerkUser?.firstName || clerkUser?.fullName?.split(' ')[0] || 'there';
+    setMessages([
+      botMsg(`Hi ${firstName}! I'm DeadlineAI. I'll set up your personalised study planner in just a minute. How many hours per day can you dedicate to studying? (e.g. 2, 3, 4)`),
+    ]);
+    initializedRef.current = true;
+  }, [clerkLoaded, clerkUser]);
 
   // Collected data
-  const [name, setName] = useState('');
   const [hours, setHours] = useState(0);
   const [prefTime, setPrefTime] = useState<UserProfile['preferredTime']>('morning');
   const [unavailable, setUnavailable] = useState<string[]>([]);
@@ -55,7 +63,6 @@ export default function OnboardingFlow() {
     }, 300);
   }
 
-  // Quick-reply chips
   function TimeChips() {
     return (
       <div className="flex gap-2 flex-wrap mt-2">
@@ -141,8 +148,9 @@ export default function OnboardingFlow() {
   }
 
   function finishOnboarding() {
+    const fullName = clerkUser?.fullName || clerkUser?.firstName || 'Student';
     const profile: UserProfile = {
-      name,
+      name: fullName,
       hoursPerDay: hours,
       preferredTime: prefTime,
       unavailableDays: unavailable,
@@ -162,11 +170,6 @@ export default function OnboardingFlow() {
 
   function processInput(text: string) {
     switch (step) {
-      case 'name': {
-        setName(text);
-        advance(text, 'hours', `Nice to meet you, ${text}! How many hours per day can you dedicate to studying? (e.g. 2, 3, 4)`);
-        break;
-      }
       case 'hours': {
         const n = parseFloat(text);
         const h = isNaN(n) ? 2 : Math.min(Math.max(n, 0.5), 12);
@@ -205,10 +208,17 @@ export default function OnboardingFlow() {
     if (!isNaN(d.getTime())) {
       return d.toISOString().split('T')[0];
     }
-    // Try "May 20 2026" style
     const attempt = new Date(raw.replace(',', ''));
     if (!isNaN(attempt.getTime())) return attempt.toISOString().split('T')[0];
     return raw;
+  }
+
+  if (!clerkLoaded || messages.length === 0) {
+    return (
+      <div className="h-screen flex items-center justify-center" style={{ background: '#F4F4F8' }}>
+        <div className="w-8 h-8 rounded-full border-2 border-[#534AB7] border-t-transparent animate-spin" />
+      </div>
+    );
   }
 
   const showDayChips = step === 'days';
@@ -252,7 +262,6 @@ export default function OnboardingFlow() {
             </div>
           ))}
 
-          {/* Inline chips after last bot message */}
           {showTimeChips && <TimeChips />}
           {showDayChips && <DayChips />}
           {showMoreChips && <MoreDeadlineChips />}

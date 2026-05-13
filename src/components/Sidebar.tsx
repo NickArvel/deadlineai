@@ -9,12 +9,16 @@ import {
   MessageSquare,
   BarChart3,
   Zap,
+  LogOut,
 } from 'lucide-react';
 import { useUser } from '@/context/UserContext';
+import { useUser as useClerkUser, useClerk } from '@clerk/nextjs';
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { profile } = useUser();
+  const { user: clerkUser } = useClerkUser();
+  const { signOut } = useClerk();
 
   const deadlineCount = profile?.deadlines?.length ?? 0;
   const navItems = [
@@ -24,6 +28,9 @@ export default function Sidebar() {
     { href: '/chat', label: 'AI Chat', icon: MessageSquare, dot: true },
     { href: '/progress', label: 'Progress', icon: BarChart3 },
   ];
+
+  const displayName = clerkUser?.fullName || clerkUser?.firstName || profile?.name || 'Student';
+  const avatarUrl = clerkUser?.imageUrl;
 
   return (
     <aside className="w-60 h-screen bg-white border-r border-gray-100 flex flex-col shrink-0">
@@ -92,20 +99,37 @@ export default function Sidebar() {
         </div>
       </nav>
 
-      {/* User profile */}
-      <div className="px-4 py-4 border-t border-gray-100">
-        <div className="flex items-center gap-3 px-2">
-          <div
-            className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
-            style={{ background: 'linear-gradient(135deg, #534AB7 0%, #6B62C8 100%)' }}
-          >
-            {profile?.name ? profile.name[0].toUpperCase() : '?'}
-          </div>
+      {/* User profile + Sign out */}
+      <div className="px-4 py-3 border-t border-gray-100">
+        <div className="flex items-center gap-3 px-2 mb-3">
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatarUrl}
+              alt={displayName}
+              referrerPolicy="no-referrer"
+              className="w-9 h-9 rounded-full shrink-0 object-cover"
+            />
+          ) : (
+            <div
+              className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+              style={{ background: 'linear-gradient(135deg, #534AB7 0%, #6B62C8 100%)' }}
+            >
+              {displayName[0].toUpperCase()}
+            </div>
+          )}
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900 truncate">{profile?.name ?? 'Student'}</p>
+            <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
             <p className="text-xs text-gray-400 truncate capitalize">{profile?.preferredTime ?? ''} learner</p>
           </div>
         </div>
+        <button
+          onClick={() => signOut({ redirectUrl: '/sign-in' })}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-500 hover:text-red-500 hover:bg-red-50 transition-all"
+        >
+          <LogOut size={15} />
+          Sign out
+        </button>
       </div>
     </aside>
   );

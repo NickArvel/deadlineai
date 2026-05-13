@@ -17,7 +17,12 @@
       "PowerShell($env:ANTHROPIC_API_KEY; [System.Environment]::GetEnvironmentVariable\\(\"ANTHROPIC_API_KEY\", \"User\"\\); [System.Environment]::GetEnvironmentVariable\\(\"ANTHROPIC_API_KEY\", \"Machine\"\\))",
       "Bash(npm run *)",
       "Bash(npx tsc *)",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\nicka\\\\Desktop\\\\deadlineai\\\\src\" -Recurse | Where-Object { -not $_.PSIsContainer } | Select-Object FullName | Format-Table)",
+      "PowerShell(Start-Sleep -Seconds 5; try { Invoke-WebRequest -Uri \"http://localhost:3000\" -UseBasicParsing -TimeoutSec 10 | Select-Object -ExpandProperty StatusCode } catch { $_.Exception.Message })",
+      "PowerShell(try { Invoke-WebRequest -Uri \"http://localhost:3000/sign-in\" -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 5 } catch { \"Status: $\\($_.Exception.Response.StatusCode.value__\\) $\\($_.Exception.Response.StatusDescription\\)\" })",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:3000/\" -UseBasicParsing -MaximumRedirection 5 -TimeoutSec 10; \"Status: $\\($r.StatusCode\\)\" } catch { \"Error: $\\($_.Exception.Message\\)\" })",
+      "PowerShell($r = Invoke-WebRequest -Uri \"http://localhost:3000/\" -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 10; \"Status: $\\($r.StatusCode\\)\"; $r.Headers | Format-List)"
     ]
   }
 }

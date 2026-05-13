@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
+import { useAuth } from '@clerk/nextjs';
 
 export type Deadline = {
   id: string;
@@ -27,29 +28,35 @@ type UserContextType = {
 
 const UserContext = createContext<UserContextType | null>(null);
 
-const STORAGE_KEY = 'deadlineai_profile';
+function storageKey(userId: string) {
+  return `deadlineai_profile_${userId}`;
+}
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
+  const { userId, isLoaded: authLoaded } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
+    if (!authLoaded || !userId) return;
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(storageKey(userId));
       if (raw) setProfile(JSON.parse(raw));
     } catch {
       // ignore corrupt data
     }
     setIsLoaded(true);
-  }, []);
+  }, [authLoaded, userId]);
 
   function saveProfile(p: UserProfile) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
+    if (!userId) return;
+    localStorage.setItem(storageKey(userId), JSON.stringify(p));
     setProfile(p);
   }
 
   function resetProfile() {
-    localStorage.removeItem(STORAGE_KEY);
+    if (!userId) return;
+    localStorage.removeItem(storageKey(userId));
     setProfile(null);
   }
 

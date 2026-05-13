@@ -9,7 +9,7 @@ import {
   useState,
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { UserProfile } from '@/context/UserContext';
+import { UserProfile, useUser } from '@/context/UserContext';
 
 export type Message = {
   id: number;
@@ -62,33 +62,25 @@ function buildWelcome(profile: UserProfile | null): Message {
   };
 }
 
-function getProfileFromStorage(): UserProfile | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem('deadlineai_profile');
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
 export function ChatProvider({ children }: { children: React.ReactNode }) {
+  const { profile, isLoaded } = useUser();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const [welcomeSet, setWelcomeSet] = useState(false);
   const messagesRef = useRef<Message[]>([]);
   const welcomeIdRef = useRef<number>(0);
   const pathname = usePathname();
   const router = useRouter();
 
-  // Initialize welcome message once on mount (after localStorage is available)
   useEffect(() => {
-    const profile = getProfileFromStorage();
+    if (!isLoaded || welcomeSet) return;
     const welcome = buildWelcome(profile);
     welcomeIdRef.current = welcome.id;
     setMessages([welcome]);
     messagesRef.current = [welcome];
-  }, []);
+    setWelcomeSet(true);
+  }, [isLoaded, welcomeSet, profile]);
 
   messagesRef.current = messages;
 
@@ -115,8 +107,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         const apiMessages = [...messagesRef.current, userMsg]
           .filter((m) => m.id !== welcomeId && m.content !== '')
           .map((m) => ({ role: m.role, content: m.content }));
-
-        const profile = getProfileFromStorage();
 
         const res = await fetch('/api/chat', {
           method: 'POST',
@@ -151,7 +141,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(false);
       }
     },
-    [isLoading, pathname, router],
+    [isLoading, pathname, router, profile],
   );
 
   const clearPending = useCallback(() => setPendingMessage(null), []);

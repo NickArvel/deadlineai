@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Geist } from 'next/font/google';
 import './globals.css';
-import AppShell from '@/components/AppShell';
+import { ClerkProvider } from '@clerk/nextjs';
 import { ChatProvider } from '@/context/ChatContext';
 import { UserProvider } from '@/context/UserContext';
 
@@ -22,14 +22,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geist.variable} antialiased`}>
-      <body className="h-screen overflow-hidden" style={{ background: '#F4F4F8' }}>
-        <UserProvider>
-          <ChatProvider>
-            <AppShell>{children}</AppShell>
-          </ChatProvider>
-        </UserProvider>
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en" className={`${geist.variable} antialiased`}>
+        <body className="h-screen overflow-hidden" style={{ background: '#F4F4F8' }}>
+          <UserProvider>
+            <ChatProvider>
+              {children}
+            </ChatProvider>
+          </UserProvider>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
