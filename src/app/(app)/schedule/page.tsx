@@ -42,6 +42,16 @@ const UNAVAIL_MAP: Record<string, number> = {
   Friday: 4, Saturday: 5, Sunday: 6,
 };
 
+function localDateStr(d: Date): string {
+  return (
+    d.getFullYear() +
+    '-' +
+    String(d.getMonth() + 1).padStart(2, '0') +
+    '-' +
+    String(d.getDate()).padStart(2, '0')
+  );
+}
+
 export default function SchedulePage() {
   const { profile, updateScheduleTask } = useUser();
   const [weekOffset, setWeekOffset] = useState(0);
@@ -83,7 +93,7 @@ export default function SchedulePage() {
   const positionedByDay: PositionedTask[][] = useMemo(
     () =>
       weekDates.map((date) => {
-        const dateStr = date.toISOString().slice(0, 10);
+        const dateStr = localDateStr(date);
         const dayTasks = tasksByDate[dateStr] ?? [];
         let top = (startHour - START_HOUR) * HOUR_HEIGHT + 2;
 

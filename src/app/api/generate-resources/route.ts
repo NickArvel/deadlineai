@@ -101,6 +101,6 @@ Requirements:
     return Response.json({ flashcards, mockQuestions, youtubeLinks });
   } catch (err) {
     console.error('[generate-resources] error:', err);
-    return new Response('Internal server error', { status: 500 });
+    return Response.json({ flashcards: [], mockQuestions: [], youtubeLinks: [] }, { status: 500 });
   }
 }

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useChat, SearchResult } from '@/context/ChatContext';
 import { useUser } from '@/context/UserContext';
-import { generateScheduleTasks, Deadline } from '@/context/UserContext';
+import { parseStudyPlanTasks, Deadline } from '@/context/UserContext';
 
 const suggestions = [
   { icon: <BookOpen size={14} />, text: 'What should I study right now?' },
@@ -148,10 +148,13 @@ export default function ChatPage() {
       };
 
       saveProfile({ ...profile, deadlines: [...profile.deadlines, newDeadline] });
-      addScheduleTasks(generateScheduleTasks(newDeadline, profile));
+      // Parse day-by-day tasks from the AI study plan; falls back to generic daily sessions
+      addScheduleTasks(parseStudyPlanTasks(newDeadline.studyPlan ?? '', newDeadline, profile));
       markActionSaved(messageId);
 
-      // Generate resources in background — addResource uses profileRef internally so the closure is safe
+      // Generate flashcards, mock questions, and YouTube links in the background.
+      // addResource reads profileRef internally so it always has the latest profile even
+      // though this callback fires asynchronously.
       fetch('/api/generate-resources', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -162,22 +165,23 @@ export default function ChatPage() {
           studyPlan: msg.content,
         }),
       })
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.flashcards?.length || data.mockQuestions?.length || data.youtubeLinks?.length) {
-            addResource({
-              id: Date.now().toString(),
-              deadlineId: newDeadline.id,
-              subject: action.subject,
-              task: action.task,
-              flashcards: data.flashcards ?? [],
-              mockQuestions: data.mockQuestions ?? [],
-              youtubeLinks: data.youtubeLinks ?? [],
-              createdAt: new Date().toISOString(),
-            });
-          }
+        .then(async (r) => {
+          if (!r.ok) return;
+          const data = await r.json();
+          // Always save the resource entry so the subject appears in My Resources,
+          // even if some arrays are empty (e.g. Tavily key not configured yet).
+          addResource({
+            id: Date.now().toString(),
+            deadlineId: newDeadline.id,
+            subject: action.subject,
+            task: action.task,
+            flashcards: data.flashcards ?? [],
+            mockQuestions: data.mockQuestions ?? [],
+            youtubeLinks: data.youtubeLinks ?? [],
+            createdAt: new Date().toISOString(),
+          });
         })
-        .catch(() => { /* ignore */ });
+        .catch(() => { /* network failures are non-fatal */ });
     } finally {
       setSavingAction(null);
     }

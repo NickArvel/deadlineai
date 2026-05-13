@@ -65,19 +65,31 @@ const UNAVAIL_DOW: Record<string, number> = {
   Thursday: 4, Friday: 5, Saturday: 6,
 };
 
+// Always use local date so tasks match calendar cells regardless of timezone
+function localDateStr(d: Date): string {
+  return (
+    d.getFullYear() +
+    '-' +
+    String(d.getMonth() + 1).padStart(2, '0') +
+    '-' +
+    String(d.getDate()).padStart(2, '0')
+  );
+}
+
+// Fallback: one generic session per available day until the due date
 export function generateScheduleTasks(deadline: Deadline, profile: UserProfile): ScheduleTask[] {
   const unavailDow = (profile.unavailableDays ?? []).map((d) => UNAVAIL_DOW[d] ?? -1);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const due = new Date(deadline.dueDate);
-  due.setHours(0, 0, 0, 0);
+  due.setHours(23, 59, 59, 999);
 
   const tasks: ScheduleTask[] = [];
   const current = new Date(today);
 
-  while (current < due) {
+  while (current <= due) {
     if (!unavailDow.includes(current.getDay())) {
-      const dateStr = current.toISOString().slice(0, 10);
+      const dateStr = localDateStr(current);
       tasks.push({
         id: `${deadline.id}_${dateStr}`,
         deadlineId: deadline.id,
@@ -92,6 +104,107 @@ export function generateScheduleTasks(deadline: Deadline, profile: UserProfile):
   }
 
   return tasks;
+}
+
+/**
+ * Parse "Day N: description" entries from the AI study plan text and map each
+ * to an actual calendar date, skipping the student's unavailable days.
+ * Falls back to generateScheduleTasks when no day entries are found.
+ */
+export function parseStudyPlanTasks(
+  studyPlan: string,
+  deadline: Deadline,
+  profile: UserProfile,
+): ScheduleTask[] {
+  const lines = studyPlan.split('\n');
+
+  // Match lines that look like "Day 1:", "**Day 2:**", "Day 3 (Monday):", etc.
+  const dayHeaderRe = /^\*{0,2}Day\s+(\d+)(?:\s*\([^)]*\))?\*{0,2}\s*[:\-–—]/i;
+
+  const dayEntries: { day: number; description: string }[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    const m = line.match(dayHeaderRe);
+    if (!m) continue;
+
+    const dayNum = parseInt(m[1], 10);
+    if (dayNum <= 0 || dayEntries.find((e) => e.day === dayNum)) continue;
+
+    // Grab same-line content after the "Day N:" prefix
+    const afterHeader = line.slice(line.indexOf(m[0]) + m[0].length)
+      .replace(/^\*+/, '')
+      .trim();
+
+    let description = afterHeader;
+
+    // If nothing on the same line, collect the first 1-2 bullet points below
+    if (!description) {
+      const bullets: string[] = [];
+      for (let j = i + 1; j < lines.length && bullets.length < 2; j++) {
+        const next = lines[j].trim();
+        if (next.match(/\*{0,2}Day\s+\d+/i)) break; // next day section
+        const bullet = next
+          .replace(/^[-•*]\s*/, '')
+          .replace(/^\d+\.\s*/, '')
+          .replace(/\*\*/g, '')
+          .trim();
+        if (bullet.length > 3) bullets.push(bullet);
+      }
+      description = bullets.join('; ');
+    }
+
+    // Strip duration hints like "(2 hours)" or "(30 mins)" and bold markers
+    description = description
+      .replace(/\*\*/g, '')
+      .replace(/\s*\([\d.,]+\s*-?\s*[\d.,]*\s*h(?:ours?)?\)/gi, '')
+      .replace(/\s*\([\d]+\s*-?\s*[\d]*\s*min(?:utes?)?\)/gi, '')
+      .trim();
+
+    if (description.length > 2) {
+      dayEntries.push({ day: dayNum, description });
+    }
+  }
+
+  if (dayEntries.length === 0) {
+    return generateScheduleTasks(deadline, profile);
+  }
+
+  dayEntries.sort((a, b) => a.day - b.day);
+
+  // Build a list of available study dates starting from today
+  const unavailDow = (profile.unavailableDays ?? []).map((d) => UNAVAIL_DOW[d] ?? -1);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const maxDay = dayEntries[dayEntries.length - 1].day;
+  const availableDates: string[] = [];
+  const cursor = new Date(today);
+
+  // Generate enough available dates to cover maxDay study-days (cap at 365)
+  while (availableDates.length < maxDay && availableDates.length < 365) {
+    if (!unavailDow.includes(cursor.getDay())) {
+      availableDates.push(localDateStr(cursor));
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  const tasks: ScheduleTask[] = [];
+  for (const entry of dayEntries) {
+    const dateStr = availableDates[entry.day - 1]; // Day 1 → index 0
+    if (!dateStr) continue;
+    tasks.push({
+      id: `${deadline.id}_day${entry.day}`,
+      deadlineId: deadline.id,
+      subject: deadline.subject,
+      task: entry.description,
+      date: dateStr,
+      durationHours: Math.min(profile.hoursPerDay ?? 2, 2),
+      completed: false,
+    });
+  }
+
+  return tasks.length > 0 ? tasks : generateScheduleTasks(deadline, profile);
 }
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
