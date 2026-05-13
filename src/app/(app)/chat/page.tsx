@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { Zap, BookOpen, CalendarDays, Flame, ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react';
+import { Zap, BookOpen, CalendarDays, Flame, ThumbsUp, ThumbsDown, Loader2, Paperclip } from 'lucide-react';
 import { useChat } from '@/context/ChatContext';
 import { useUser } from '@/context/UserContext';
 
@@ -100,6 +100,15 @@ export default function ChatPage() {
                 message.role === 'user' ? 'items-end' : 'items-start'
               }`}
             >
+              {message.attachedFileName && (
+                <div
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border mb-0.5"
+                  style={{ background: 'rgba(83,74,183,0.15)', color: '#fff', borderColor: 'rgba(255,255,255,0.25)' }}
+                >
+                  <Paperclip size={10} />
+                  <span className="max-w-[200px] truncate">{message.attachedFileName}</span>
+                </div>
+              )}
               <div
                 className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
                   message.role === 'user'

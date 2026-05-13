@@ -24,50 +24,49 @@ export async function POST(req: NextRequest) {
     const fileContent = isImage
       ? ({
           type: 'image' as const,
-          source: {
-            type: 'base64' as const,
-            media_type: mimeType as 'image/jpeg' | 'image/png',
-            data: fileData,
-          },
+          source: { type: 'base64' as const, media_type: mimeType as 'image/jpeg' | 'image/png', data: fileData },
         })
       : ({
           type: 'document' as const,
-          source: {
-            type: 'base64' as const,
-            media_type: 'application/pdf' as const,
-            data: fileData,
-          },
+          source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: fileData },
         });
 
     const response = await anthropic.messages.create({
       model: 'claude-opus-4-7',
-      max_tokens: 4096,
+      max_tokens: 8096,
       thinking: { type: 'adaptive' },
       system: [
         {
           type: 'text',
-          text: `You are an academic schedule analyzer. Extract deadlines, assignments, exams, and study tasks from academic documents such as timetables, syllabi, curricula, and homework schedules.
+          text: `You are an academic schedule extractor. Your job is to extract EVERY single academic item from the document — do NOT filter, skip, or summarize.
 
-Respond with ONLY valid JSON — no markdown, no prose before or after. Match this exact schema:
+Extract ALL of the following if present: assignments, essays, reports, labs, projects, presentations, exams, tests, quizzes, readings, tutorials, lectures, workshops, problem sets, homework, coursework, revision tasks, and any other academic activity.
+
+Do NOT filter by whether something has an explicit due date. Include EVERYTHING. The student will decide what to keep.
+
+For due dates:
+- Use the exact date if clearly stated
+- Infer from context when possible (e.g. "Week 3" → estimate the date, "before midterm" → reasonable estimate)
+- If no date at all can be inferred, use 2026-07-01 as a placeholder — the student can edit it
+- Format ALL dates as YYYY-MM-DD; assume year 2026 if not stated
+
+Respond with ONLY valid JSON — no markdown, no prose. Match this exact schema:
 {
-  "summary": "One sentence describing what was found in the document",
+  "summary": "One sentence describing the document",
   "subjects": ["subject1", "subject2"],
   "extractedDeadlines": [
     {
-      "subject": "Subject name",
-      "task": "Specific task or assignment name",
+      "subject": "Course or subject name",
+      "task": "Specific item name (be descriptive)",
       "dueDate": "YYYY-MM-DD",
       "estimatedHours": 3
     }
   ]
 }
 
-Rules:
-- Only include items with a clearly implied or stated due date
-- Format all dates as YYYY-MM-DD; if the year is missing assume 2026
-- estimatedHours: 1–20 based on task complexity (exam = 8–15, essay = 4–10, homework = 1–4)
-- task must be specific (e.g. "Chapter 3 Lab Report" not just "Lab Report")
-- If nothing is found, return an empty extractedDeadlines array`,
+estimatedHours: 1–20 based on task complexity (exam = 8–15, essay = 4–10, lab = 2–6, homework = 1–4, reading = 1–3).
+task: be as specific as possible using the exact wording from the document.
+Include EVERY item you find — err on the side of including too much rather than too little.`,
           cache_control: { type: 'ephemeral' },
         },
       ],
@@ -78,7 +77,7 @@ Rules:
             fileContent,
             {
               type: 'text',
-              text: `File: ${fileName}\n\nAnalyze this document and extract all deadlines, assignments, and study tasks as JSON.`,
+              text: `File: ${fileName}\n\nExtract EVERY academic item from this document as JSON. Include everything — do not filter anything out.`,
             },
           ],
         },

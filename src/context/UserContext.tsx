@@ -8,6 +8,8 @@ export type Deadline = {
   subject: string;
   task: string;
   dueDate: string; // YYYY-MM-DD
+  type?: 'assignment' | 'exam' | 'project' | 'other';
+  studyPlan?: string;
 };
 
 export type UserProfile = {

@@ -16,6 +16,12 @@ export type Message = {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  attachedFileName?: string;
+};
+
+export type AttachedFile = {
+  name: string;
+  mimeType: string;
 };
 
 type ChatContextType = {
@@ -24,6 +30,9 @@ type ChatContextType = {
   pendingMessage: string | null;
   clearPending: () => void;
   sendMessage: (content: string) => Promise<void>;
+  attachedFile: AttachedFile | null;
+  attachFile: (file: File) => Promise<void>;
+  clearAttachment: () => void;
 };
 
 const ChatContext = createContext<ChatContextType | null>(null);
@@ -62,14 +71,26 @@ function buildWelcome(profile: UserProfile | null): Message {
   };
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { profile, isLoaded } = useUser();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [welcomeSet, setWelcomeSet] = useState(false);
+  const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null);
   const messagesRef = useRef<Message[]>([]);
   const welcomeIdRef = useRef<number>(0);
+  // Store full file data in a ref so sendMessage can access it without re-creating
+  const pendingFileDataRef = useRef<{ name: string; data: string; mimeType: string } | null>(null);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -84,9 +105,25 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   messagesRef.current = messages;
 
+  const attachFile = useCallback(async (file: File) => {
+    const data = await fileToBase64(file);
+    pendingFileDataRef.current = { name: file.name, data, mimeType: file.type };
+    setAttachedFile({ name: file.name, mimeType: file.type });
+  }, []);
+
+  const clearAttachment = useCallback(() => {
+    pendingFileDataRef.current = null;
+    setAttachedFile(null);
+  }, []);
+
   const sendMessage = useCallback(
     async (content: string) => {
       if (!content.trim() || isLoading) return;
+
+      // Grab and clear the pending file before any async work
+      const fileToSend = pendingFileDataRef.current;
+      pendingFileDataRef.current = null;
+      setAttachedFile(null);
 
       if (pathname !== '/chat') {
         setPendingMessage(content);
@@ -95,7 +132,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       }
 
       const timestamp = now();
-      const userMsg: Message = { id: Date.now(), role: 'user', content, timestamp };
+      const userMsg: Message = {
+        id: Date.now(),
+        role: 'user',
+        content,
+        timestamp,
+        attachedFileName: fileToSend?.name,
+      };
       const aiId = Date.now() + 1;
       const aiMsg: Message = { id: aiId, role: 'assistant', content: '', timestamp };
 
@@ -111,7 +154,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: apiMessages, userProfile: profile }),
+          body: JSON.stringify({
+            messages: apiMessages,
+            userProfile: profile,
+            fileAttachment: fileToSend ?? null,
+          }),
         });
 
         if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
@@ -148,7 +195,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ChatContext.Provider
-      value={{ messages, isLoading, pendingMessage, clearPending, sendMessage }}
+      value={{
+        messages,
+        isLoading,
+        pendingMessage,
+        clearPending,
+        sendMessage,
+        attachedFile,
+        attachFile,
+        clearAttachment,
+      }}
     >
       {children}
     </ChatContext.Provider>

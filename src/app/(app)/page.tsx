@@ -1,9 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Clock, CheckSquare, Target, Flame, BellDot, CalendarDays, Plus, Zap, Upload } from 'lucide-react';
-import { useUser, Deadline } from '@/context/UserContext';
+import { useUser } from '@/context/UserContext';
 import UploadModal from '@/components/UploadModal';
+import AddDeadlineModal from '@/components/AddDeadlineModal';
+import { useChat } from '@/context/ChatContext';
 
 const COLORS = ['#8B5CF6', '#F59E0B', '#10B981', '#3B82F6', '#EF4444', '#EC4899', '#14B8A6', '#F97316'];
 
@@ -45,7 +49,10 @@ function greeting() {
 
 export default function DashboardPage() {
   const { profile } = useUser();
+  const { sendMessage } = useChat();
+  const router = useRouter();
   const [showUpload, setShowUpload] = useState(false);
+  const [showAddDeadline, setShowAddDeadline] = useState(false);
 
   const deadlines = profile?.deadlines ?? [];
   const allSubjects = [...new Set(deadlines.map((d) => d.subject))];
@@ -60,7 +67,6 @@ export default function DashboardPage() {
 
   const userName = profile?.name ?? 'there';
 
-  // Generate simple today sessions based on the most urgent deadline and preferred time
   const preferredTime = profile?.preferredTime ?? 'morning';
   const timeMap: Record<string, string[]> = {
     morning: ['9:00 AM', '10:30 AM', '11:00 AM', '12:30 PM'],
@@ -81,6 +87,7 @@ export default function DashboardPage() {
   return (
     <div className="p-6 space-y-6 pb-4">
       {showUpload && <UploadModal onClose={() => setShowUpload(false)} />}
+      {showAddDeadline && <AddDeadlineModal onClose={() => setShowAddDeadline(false)} />}
 
       {/* Greeting */}
       <div className="flex items-center justify-between">
@@ -104,7 +111,6 @@ export default function DashboardPage() {
 
       {/* Stats Row */}
       <div className="grid grid-cols-4 gap-4">
-        {/* Streak */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-start justify-between">
             <div>
@@ -126,7 +132,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Study Time */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-start justify-between">
             <div>
@@ -144,7 +149,6 @@ export default function DashboardPage() {
           <p className="text-xs text-emerald-600 font-semibold mt-3">Keep it consistent!</p>
         </div>
 
-        {/* Tasks */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-start justify-between">
             <div>
@@ -164,7 +168,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Preferred time */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-start justify-between">
             <div>
@@ -191,9 +194,13 @@ export default function DashboardPage() {
               <BellDot size={16} style={{ color: '#534AB7' }} />
               <h3 className="font-semibold text-gray-900 text-sm">Upcoming Deadlines</h3>
             </div>
-            <button className="text-xs font-semibold hover:underline" style={{ color: '#534AB7' }}>
+            <Link
+              href="/deadlines"
+              className="text-xs font-semibold hover:underline"
+              style={{ color: '#534AB7' }}
+            >
               View all →
-            </button>
+            </Link>
           </div>
           <div className="divide-y divide-gray-50">
             {active.length === 0 ? (
@@ -207,6 +214,7 @@ export default function DashboardPage() {
                   <div
                     key={deadline.id}
                     className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 transition-colors cursor-pointer group"
+                    onClick={() => router.push('/deadlines')}
                   >
                     <div className="w-1 h-10 rounded-full shrink-0" style={{ background: color }} />
                     <div className="flex-1 min-w-0">
@@ -229,7 +237,10 @@ export default function DashboardPage() {
             )}
           </div>
           <div className="px-5 py-3 border-t border-gray-50">
-            <button className="flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-gray-600 transition-colors">
+            <button
+              onClick={() => setShowAddDeadline(true)}
+              className="flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-[#534AB7] transition-colors"
+            >
               <Plus size={13} />
               Add new deadline
             </button>
@@ -239,10 +250,10 @@ export default function DashboardPage() {
         {/* Today's Study Plan */}
         <div className="col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <div className="flex items-center gap-2">
+            <Link href="/schedule" className="flex items-center gap-2 hover:opacity-75 transition-opacity">
               <CalendarDays size={16} style={{ color: '#534AB7' }} />
               <h3 className="font-semibold text-gray-900 text-sm">Today&apos;s Plan</h3>
-            </div>
+            </Link>
             <span className="text-xs text-gray-400 font-medium">
               {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </span>
@@ -294,7 +305,10 @@ export default function DashboardPage() {
           </div>
 
           <div className="px-5 pb-4">
-            <button className="w-full py-2 rounded-lg text-sm font-medium border border-dashed border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-500 transition-colors">
+            <button
+              onClick={() => router.push('/schedule')}
+              className="w-full py-2 rounded-lg text-sm font-medium border border-dashed border-gray-200 text-gray-400 hover:border-[#534AB7] hover:text-[#534AB7] transition-colors"
+            >
               + Add session
             </button>
           </div>
@@ -318,7 +332,12 @@ export default function DashboardPage() {
                 due <strong className="text-white">{formatDue(active[0].dueDate)}</strong>. Focus on this first!
               </p>
             </div>
-            <button className="shrink-0 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap">
+            <button
+              onClick={() =>
+                sendMessage(`Help me make a study plan for "${active[0].task}" in ${active[0].subject}, due ${active[0].dueDate}.`)
+              }
+              className="shrink-0 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+            >
               Ask AI →
             </button>
           </div>
